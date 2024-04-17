@@ -26,19 +26,36 @@ public:
 
         imgArray = new int*[numRows];
         for(int i = 0; i < numRows; i++) {
-            imgArray[i] = new int[numCols]{};
+            imgArray[i] = new int[numCols];
+            fill_n(imgArray[i], numCols, 0);
         }
 
         CartesianArray = new int*[HoughDist];
         for(int i = 0; i < HoughDist; i++) {
-            CartesianArray[i] = new int[HoughAngle]{};
+            CartesianArray[i] = new int[HoughAngle];
+            fill_n(CartesianArray[i], HoughAngle, 0);
         }
 
         PolarArray = new int*[HoughDist];
         for(int i = 0; i < HoughDist; i++) {
-            PolarArray[i] = new int[HoughAngle]{};
+            PolarArray[i] = new int[HoughAngle];
+            fill_n(PolarArray[i], HoughAngle, 0);
         }
 
+    }
+
+    ~HoughTransform(){
+        for (int i = 0; i < numRows; i++) {
+            delete[] imgArray[i];
+        }
+        delete[] imgArray;
+
+        for (int i = 0; i < HoughDist; i++) {
+            delete[] CartesianArray[i];
+            delete[] PolarArray[i];
+        }
+        delete[] CartesianArray;
+        delete[] PolarArray;
     }
 
     void loadImage(ifstream& inFile) {
@@ -62,8 +79,8 @@ public:
         outFile << numRows << numCols << minVal << maxVal << endl;
         string str = to_string(maxVal);
         int width = str.length();
-        for(int i = 0; i <= numRows; i++){
-            for(int j = 0; j <= numCols; j++){
+        for(int i = 0; i < numRows; i++){
+            for(int j = 0; j < numCols; j++){
                 if(inAry[i][j] > 0){
                     outFile << inAry[i][j];
                 } else {
@@ -80,6 +97,52 @@ public:
         }
     }
 
+    void computeSinusoid(int x, int y, ofstream& debugFile){
+        debugFile << "Entering computeSinusoid()" << endl;
+        angleInDegree = 0;
+        while(angleInDegree <= 179){
+            angleInRadians = (double)angleInDegree / 180.00 * M_PI;
+            double dist = cartesianDist(x, y, angleInDegree);
+            int distInt = (int)dist;
+            if (distInt >= 0 && distInt < HoughDist) {
+                CartesianArray[distInt][angleInDegree]++;
+            }
+            dist = polarDist(x, y, angleInRadians);
+            distInt = (int)dist;
+            if (distInt >= 0 && distInt < HoughDist) {
+                PolarArray[distInt][angleInDegree]++;
+            }
+            angleInDegree++;
+        }
+
+        debugFile << "Leaving computeSinusoid()" << endl;
+
+    }
+
+    void buildHoughSpace(ofstream& debugFile) {
+        debugFile << "Entering buildHoughSpace" << endl;
+        for (int x = 0; x < numRows; x++) {
+            for (int y = 0; y < numCols; y++) {
+                if (imgArray[x][y] > 0) {
+                    computeSinusoid(x, y, debugFile);
+                }
+            }
+        }
+        debugFile << "Leaving buildHoughSpace" << endl;
+    }
+
+    double cartesianDist(int x, int y, int angleInDeg) {
+        double base = sqrt(x * x + y * y);
+
+        double t = angleInDeg - atan2(y, x) - M_PI / 2;
+
+        double distance = base + cos(t);
+        return distance;
+    }
+    double polarDist(int x, int y, double angleInRad) {
+        return x * cos(angleInRad) + y * sin(angleInRad);
+    }
+
 };
 
 int main(int argc, char* argv[]) {
@@ -89,7 +152,7 @@ int main(int argc, char* argv[]) {
     }
 
     ifstream inFile(argv[1]);
-    ifstream outFile(argv[2]);
+    ofstream outFile(argv[2]);
     ofstream debugFile(argv[3]);
 
 
@@ -108,10 +171,10 @@ int main(int argc, char* argv[]) {
     HoughTransform houghTransform(numRows, numCols, minVal, maxVal, HoughAngle, HoughDist, offSet);
 
     houghTransform.loadImage(inFile);
-    houghTransform.reformatPrettyPrint();
-    houghTransform.buildHoughSpace();
-    houghTransform.reformatPrettyPrint();
-    houghTransform.reformatPrettyPrint();
+    houghTransform.reformatPrettyPrint(houghTransform.imgArray, outFile);
+    houghTransform.buildHoughSpace(debugFile);
+    houghTransform.reformatPrettyPrint(houghTransform.CartesianArray, outFile);
+    houghTransform.reformatPrettyPrint(houghTransform.PolarArray, outFile);
 
 
     inFile.close();
